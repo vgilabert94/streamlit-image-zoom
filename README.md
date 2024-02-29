@@ -1,13 +1,18 @@
-# Streamlit Image Zoom App
+# Image Zoom - Streamlit Component
 
 This repository presents a Python Streamlit component that wraps HTML, CSS, and JS code, enabling the creation of an interactive image zoom application.
+
+<p align="center">
+    <img src="images/mousemove.gif" width="512"/>
+</p>
+
 
 ## Installation
 - Install via pip:
 
 ```bash
 pip install streamlit
-pip install streamlit-image-comparison
+pip install streamlit-image-zoom
 ```
 
 - Install via git clone:
@@ -40,14 +45,28 @@ def image_zoom(image: Union[Image.Image, np.ndarray],
 - `increment`: The increment value for adjusting the zoom level when scrolling. Should be between 0 and 1. Default is 0.2.
 
 
-### modes
+## Modes
 
-#### mousemove
+Here's a list explaining the operation of each mode in the app:
 
-#### scroll
+### mousemove or default
+As you move the mouse, the zoom level adjusts accordingly, providing a dynamic zoom experience.
+<p align="center">
+    <img src="images/mousemove.gif" width="512"/>
+</p>
 
-#### both
+### scroll
+Zooming is activated exclusively by scrolling (wheel).  
+<p align="center">
+    <img src="images/scroll.gif" width="512"/>
+</p>
 
+### both
+This mode combines the functionalities of both "mousemove" and "scroll" modes, allowing users to navigate the image with a fixed zoom level.
+Zooming is activated by scrolling (using the mouse wheel) and moving the mouse cursor, offering flexibility in how users interact with the zoom feature.
+<p align="center">
+    <img src="images/both.gif" width="512"/>
+</p>
 
 ## Examples
 
@@ -77,9 +96,11 @@ image_zoom(image, mode="scroll", size=(800, 600), keep_aspect_ratio=False, zoom_
 Distributed under the MIT License. See LICENSE.txt for more information.
 
 ## Contact
-Vicent Gilabert - email@example.com
 
-Project Link: https://github.com/vgilabert94/streamlit-image-zoom
+[Vicent Gilabert](mailto:gilabert_vicent@hotmail.com)
+
+[Linkedin](https://www.linkedin.com/in/vgilabert/)
+
 
 ## References
 - https://github.com/fcakyon/streamlit-image-comparison
