@@ -1,7 +1,7 @@
 # Image Zoom - Streamlit Component
 
 This repository presents a Python Streamlit component that wraps HTML, CSS, and JS code, enabling the creation of an interactive image zoom application.
-
+[Try online demo!](https://image-zoom.streamlit.app/)
 <p align="center">
     <img src="images/mousemove.gif" width="512"/>
 </p>
