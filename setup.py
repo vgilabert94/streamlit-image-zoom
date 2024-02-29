@@ -12,7 +12,8 @@ def get_long_description():
 
 
 def get_requirements():
-    with open("requirements.txt", encoding="utf8") as f:
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+    with open(os.path.join(base_dir, "requirements.txt"), encoding="utf8") as f:
         return f.read().splitlines()
 
 
