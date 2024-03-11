@@ -6,7 +6,7 @@ import numpy as np
 import streamlit.components.v1 as components
 from PIL import Image
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 
 def check_image(image: Union[Image.Image, np.ndarray]) -> Image.Image:
@@ -97,6 +97,7 @@ def image_zoom(
     mode: Optional[str] = "default",
     size: Optional[Union[int, Tuple[int, int]]] = 512,
     keep_aspect_ratio: Optional[bool] = True,
+    keep_resolution: Optional[bool] = False,
     zoom_factor: Optional[Union[float, int]] = 2.0,
     increment: Optional[float] = 0.2,
 ) -> components.html:
@@ -116,6 +117,10 @@ def image_zoom(
             If True, the image will be resized while preserving its aspect ratio.
             If False, the image will be resized to exactly match the provided size without preserving aspect ratio.
             Default is True.
+        keep_resolution (Optional[bool]): Whether to keep the original resolution for zooming.
+            If True, use the original resolution for zooming. If False, use the resized image for zooming.
+            Default is False.
+            Note: Setting this parameter to True may result in slower performance, especially for images with large sizes.
         zoom_factor (Optional[Union[float, int]]): The zoom factor applied to the image when zooming in.
             Default is 2.0.
         increment (Optional[float]): The increment value for adjusting the zoom level when scrolling.
@@ -142,7 +147,17 @@ def image_zoom(
     # Check and convert to PIL image.
     image = check_image(image)
     # Resize image and convert to base64.
-    img_base64, new_size = prepare_image(image, size, keep_aspect_ratio)
+    if keep_resolution:
+        img_orig_base64, orig_size = prepare_image(image, image.size, keep_aspect_ratio)
+        img_resized_base64, resized_size = prepare_image(image, size, keep_aspect_ratio)
+        params_keep_res = f"""
+                                data-original-src="{img_orig_base64}" 
+                                data-original-width="{orig_size[0]}" 
+                                data-original-height="{orig_size[1]}"
+                        """
+    else:
+        img_resized_base64, resized_size = prepare_image(image, size, keep_aspect_ratio)
+        params_keep_res = ""
 
     css_code = """
         <style>
@@ -155,40 +170,63 @@ def image_zoom(
                 position: absolute;
                 top: 0;
                 left: 0;
+                width: 100%;
+                height: 100%;
             }
         </style>
     """
     js_code = """
         <script>
-            function ImageZoomMouseMove(selector, scale_factor) {
+            function calculateTransformOrigin(offsetX, offsetY, image, boundingRect, keep_resolution) {
+                let originX, originY;
+                if (keep_resolution) {
+                    const original_width = parseInt(image.getAttribute('data-original-width'));
+                    const original_height = parseInt(image.getAttribute('data-original-height'));
+                    const originX_original = (offsetX / boundingRect.width) * original_width;
+                    const originY_original = (offsetY / boundingRect.height) * original_height;
+                    originX = (originX_original / original_width) * 100 + '%';
+                    originY = (originY_original / original_height) * 100 + '%';
+                } else {
+                    originX = (offsetX / boundingRect.width) * 100 + '%';
+                    originY = (offsetY / boundingRect.height) * 100 + '%';
+                }
+                return { originX, originY };
+            }
+
+            function ImageZoomMouseMove(selector, scale_factor, keep_resolution) {
                 const image = document.getElementById(selector);
                 image.addEventListener('mousemove', function(event) {
                     const boundingRect = image.getBoundingClientRect();
-                    const offsetX = event.clientX - boundingRect.left;
-                    const offsetY = event.clientY - boundingRect.top;
-                    const originX = (offsetX / boundingRect.width) * 100 + '%';
-                    const originY = (offsetY / boundingRect.height) * 100 + '%';
+                    const offsetX = (event.clientX - boundingRect.left);
+                    const offsetY = (event.clientY - boundingRect.top);
+                    const { originX, originY } = calculateTransformOrigin(offsetX, offsetY, image, boundingRect, keep_resolution);
+                    if (keep_resolution) {
+                        image.src = image.getAttribute('data-original-src');
+                    }
                     image.style.transformOrigin = `${originX} ${originY}`;
                     image.style.transform = `scale(${scale_factor})`;
                 });
+                
                 image.addEventListener('mouseout', function(event) {
+                    if (keep_resolution) {
+                        image.src = image.getAttribute('src');
+                    }
                     image.style.transformOrigin = 'center center';
                     image.style.transform = 'scale(1)';
                 });
             };
 
-            function ImageZoomScroll(selector, scale_factor, increment) {
+            function ImageZoomScroll(selector, scale_factor, increment, keep_resolution) {
                 const image = document.getElementById(selector);
                 let scale = 1
 
                 image.addEventListener('wheel', function(event) {
-                    console.log(event)
                     event.preventDefault();
                     // Get the delta of the scroll event
                     var delta = event.deltaY || -event.detail;
                     if (delta === undefined) {
                         //we are on firefox
-                        delta = e.originalEvent.detail;
+                        delta = event.originalEvent.detail;
                     }
                     const sign = Math.sign(delta);
                     scale += sign > 0 ? -increment : increment;
@@ -197,20 +235,25 @@ def image_zoom(
                     const boundingRect = image.getBoundingClientRect();
                     const offsetX = event.clientX - boundingRect.left;
                     const offsetY = event.clientY - boundingRect.top;
-                    const originX = (offsetX / boundingRect.width) * 100 + '%';
-                    const originY = (offsetY / boundingRect.height) * 100 + '%';
-                    
+                    const { originX, originY } = calculateTransformOrigin(offsetX, offsetY, image, boundingRect, keep_resolution);
+                    if (keep_resolution) {
+                        image.src = image.getAttribute('data-original-src');
+                    }
                     image.style.transformOrigin = `${originX} ${originY}`;
                     image.style.transform = `scale(${scale})`;
                 });
+
                 image.addEventListener('mouseout', function(event) {
+                    if (keep_resolution) {
+                        image.src = image.getAttribute('src');
+                    }
                     image.style.transformOrigin = 'center center';
                     image.style.transform = 'scale(1)';
                     scale = 1
                 });
             };
-        
-            function ImageZoomBoth(selector, scale_factor, increment) {
+
+            function ImageZoomBoth(selector, scale_factor, increment, keep_resolution) {
                 const image = document.getElementById(selector);
                 let scale = 1;
 
@@ -218,20 +261,18 @@ def image_zoom(
                     const boundingRect = image.getBoundingClientRect();
                     const offsetX = event.clientX - boundingRect.left;
                     const offsetY = event.clientY - boundingRect.top;
-                    const originX = (offsetX / boundingRect.width) * 100 + '%';
-                    const originY = (offsetY / boundingRect.height) * 100 + '%';
+                    const { originX, originY } = calculateTransformOrigin(offsetX, offsetY, image, boundingRect, keep_resolution);
                     image.style.transformOrigin = `${originX} ${originY}`;
                     image.style.transform = `scale(${scale})`;
                 });
 
                 image.addEventListener('wheel', function(event) {
-                    console.log(event);
                     event.preventDefault();
                     // Get the delta of the scroll event
                     var delta = event.deltaY || -event.detail;
                     if (delta === undefined) {
                         //we are on firefox
-                        delta = e.originalEvent.detail;
+                        delta = event.originalEvent.detail;
                     }
                     const sign = Math.sign(delta);
                     scale += sign > 0 ? -increment : increment;
@@ -240,14 +281,18 @@ def image_zoom(
                     const boundingRect = image.getBoundingClientRect();
                     const offsetX = event.clientX - boundingRect.left;
                     const offsetY = event.clientY - boundingRect.top;
-                    const originX = (offsetX / boundingRect.width) * 100 + '%';
-                    const originY = (offsetY / boundingRect.height) * 100 + '%';
-
+                    const { originX, originY } = calculateTransformOrigin(offsetX, offsetY, boundingRect, keep_resolution);
+                    if (keep_resolution) {
+                        image.src = image.getAttribute('data-original-src');
+                    }
                     image.style.transformOrigin = `${originX} ${originY}`;
                     image.style.transform = `scale(${scale})`;
                 });
 
                 image.addEventListener('mouseout', function(event) {
+                    if (keep_resolution) {
+                        image.src = image.getAttribute('src');
+                    }
                     image.style.transformOrigin = 'center center';
                     image.style.transform = 'scale(1)';
                     scale = 1;
@@ -258,21 +303,21 @@ def image_zoom(
 
     # Assemble the HTML code with CSS and JS.
     html_code = f"""
-    {css_code}
-    <div id="container" style="width: {new_size[0]}px; height: {new_size[1]}px;">
-        <img id="image" src="{img_base64}">
-    </div>
-    {js_code}
-    <script>
-    var mode = "{mode}";
-    if (mode == "mousemove" || mode == "default") {{
-        ImageZoomMouseMove('image', {zoom_factor});
-    }} else if (mode == "scroll") {{
-        ImageZoomScroll('image', {zoom_factor}, {increment});
-    }} else if (mode == "both") {{
-        ImageZoomBoth('image', {zoom_factor}, {increment});
-    }}
-    </script>
+        {css_code}
+        <div id="container" style="width: {resized_size[0]}px; height: {resized_size[1]}px;">
+            <img id="image" src="{img_resized_base64}" {params_keep_res}>
+        </div>
+        {js_code}
+        <script>
+        var mode = "{mode}";
+        if (mode == "mousemove" || mode == "default") {{
+            ImageZoomMouseMove('image', {zoom_factor}, {str(keep_resolution).lower()});
+        }} else if (mode == "scroll") {{
+            ImageZoomScroll('image', {zoom_factor}, {increment},  {str(keep_resolution).lower()});
+        }} else if (mode == "both") {{
+            ImageZoomBoth('image', {zoom_factor}, {increment}, {str(keep_resolution).lower()});
+        }}
+        </script>
     """
 
-    return components.html(html_code, width=new_size[0], height=new_size[1])
+    return components.html(html_code, width=resized_size[0], height=resized_size[1])
