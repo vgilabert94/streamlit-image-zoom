@@ -6,7 +6,7 @@ import numpy as np
 import streamlit.components.v1 as components
 from PIL import Image
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 
 def check_image(image: Union[Image.Image, np.ndarray]) -> Image.Image:
