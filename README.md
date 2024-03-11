@@ -28,6 +28,7 @@ def image_zoom(image: Union[Image.Image, np.ndarray],
                 mode: Optional[str] = "default",
                 size: Optional[Union[int, Tuple[int, int]]] = 512,
                 keep_aspect_ratio: Optional[bool] = True,
+                keep_resolution: Optional[bool] = False,
                 zoom_factor: Optional[Union[float, int]] = 2.0,
                 increment: Optional[float] = 0.2,
             ) -> HTML:
