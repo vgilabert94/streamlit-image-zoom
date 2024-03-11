@@ -41,6 +41,8 @@ def image_zoom(image: Union[Image.Image, np.ndarray],
 - `mode`: The mode of interaction for zooming. Valid options are "default" (zoom on mousemove), "mousemove" (zoom on mousemove), "scroll" (zoom on scroll), or "both" (zoom on both mousemove and scroll). Default is "default".
 - `size`: The desired size of the displayed image. If an integer is provided, the image will be resized to have that size (width = height). If a tuple of integers (width, height) is provided, the image will be resized to fit within the specified dimensions while maintaining its aspect ratio. Default is 512.
 - `keep_aspect_ratio`: Whether to maintain the aspect ratio of the image during resizing. If True, the image will be resized while preserving its aspect ratio. If False, the image will be resized to exactly match the provided size without preserving aspect ratio. Default is True.
+- `keep_resolution`: Whether to keep the original resolution for zooming. If True, use the original resolution for zooming. If False, use the resized image for zooming. Default is False.  
+Note: Setting this parameter to True may result in slower performance, especially for images with large sizes.
 - `zoom_factor`: The zoom factor applied to the image when zooming in. Default is 2.0.
 - `increment`: The increment value for adjusting the zoom level when scrolling. Should be between 0 and 1. Default is 0.2.
 
