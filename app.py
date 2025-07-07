@@ -76,6 +76,7 @@ def main():
         increase_factor = 0.0
 
     keep_res = st.sidebar.checkbox("Keep resolution")
+    use_container_width = st.sidebar.checkbox("Use container width")
 
     st.sidebar.divider()
 
@@ -90,6 +91,7 @@ def main():
         zoom_factor=zoom_factor,
         increment=increase_factor,
         keep_resolution=keep_res,
+        use_container_width=use_container_width,
     )
 
 

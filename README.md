@@ -31,6 +31,7 @@ def image_zoom(image: Union[Image.Image, np.ndarray],
                 keep_resolution: Optional[bool] = False,
                 zoom_factor: Optional[Union[float, int]] = 2.0,
                 increment: Optional[float] = 0.2,
+                use_container_width: Optional[bool] = False,
             ) -> HTML:
 
     return component
@@ -46,6 +47,7 @@ def image_zoom(image: Union[Image.Image, np.ndarray],
 Note: Setting this parameter to True may result in slower performance, especially for images with large sizes.
 - `zoom_factor`: The zoom factor applied to the image when zooming in. Default is 2.0.
 - `increment`: The increment value for adjusting the zoom level when scrolling. Should be between 0 and 1. Default is 0.2.
+- `use_container_width`: Whether to override the size parameter with the width of the parent container. If False (default), the component uses the specified size. If True, the component takes the full width of the parent container and adjusts height to maintain aspect ratio.
 
 
 ## Modes
@@ -97,6 +99,9 @@ image_zoom(image)
 
 # Display image with custom settings
 image_zoom(image, mode="scroll", size=(800, 600), keep_aspect_ratio=False, zoom_factor=4.0, increment=0.2)
+
+# Display image using full container width (responsive)
+image_zoom(image, use_container_width=True)
 ```
 
 ## License

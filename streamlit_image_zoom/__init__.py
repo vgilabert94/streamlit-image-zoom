@@ -100,6 +100,7 @@ def image_zoom(
     keep_resolution: Optional[bool] = False,
     zoom_factor: Optional[Union[float, int]] = 2.0,
     increment: Optional[float] = 0.2,
+    use_container_width: Optional[bool] = False,
 ) -> components.html:
     """
     Display an image with interactive zoom functionality.
@@ -127,6 +128,9 @@ def image_zoom(
             Default is 2.0.
         increment (Optional[float]): The increment value for adjusting the zoom level when scrolling.
             Should be between 0 and 1. Default is 0.2.
+        use_container_width (Optional[bool]): Whether to override the size parameter with the width of the parent
+            container. If False (default), the component uses the specified size. If True, the component
+            takes the full width of the parent container and adjusts height to maintain aspect ratio.
 
     Returns:
         HTML: An HTML component displaying the image with interactive zoom functionality.
@@ -138,6 +142,7 @@ def image_zoom(
     Example:
         image_zoom(image)
         image_zoom(image, mode="scroll", size=(800, 600), keep_aspect_ratio=False, zoom_factor=3.0, increment=0.05)
+        image_zoom(image, use_container_width=True)
     """
     mode = mode.lower()
     assert (
@@ -161,6 +166,25 @@ def image_zoom(
         img_resized_base64, resized_size = prepare_image(image, size, keep_aspect_ratio)
         params_keep_res = ""
 
+    # Determine container dimensions based on use_container_width
+    if use_container_width:
+        # When using container width, we'll use CSS for responsive sizing
+        container_width_style = "width: 100%"
+        # Calculate aspect ratio for responsive height
+        aspect_ratio = resized_size[1] / resized_size[0]  # height / width
+        container_height_style = f"height: 0; padding-bottom: {aspect_ratio * 100}%; position: relative"
+        image_style = "position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+        # Use None for Streamlit component dimensions to let it auto-size
+        component_width = None
+        component_height = None
+    else:
+        # Use fixed pixel dimensions
+        container_width_style = f"width: {resized_size[0]}px"
+        container_height_style = f"height: {resized_size[1]}px"
+        image_style = "position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+        component_width = resized_size[0]
+        component_height = resized_size[1]
+
     css_code = """
         <style>
             #container {
@@ -169,11 +193,6 @@ def image_zoom(
                 cursor: zoom-in;
             }
             #image {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
             }
         </style>
     """
@@ -396,8 +415,8 @@ def image_zoom(
     # Assemble the HTML code with CSS and JS.
     html_code = f"""
         {css_code}
-        <div id="container" style="width: {resized_size[0]}px; height: {resized_size[1]}px;">
-            <img id="image" src="{img_resized_base64}" {params_keep_res}>
+        <div id="container" style="{container_width_style}; {container_height_style};">
+            <img id="image" src="{img_resized_base64}" style="{image_style}" {params_keep_res}>
         </div>
         {js_code}
         <script>
@@ -414,4 +433,4 @@ def image_zoom(
         </script>
     """
 
-    return components.html(html_code, width=resized_size[0], height=resized_size[1])
+    return components.html(html_code, width=component_width, height=component_height)
