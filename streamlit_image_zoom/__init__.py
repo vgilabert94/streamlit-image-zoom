@@ -170,10 +170,8 @@ def image_zoom(
     if use_container_width:
         # When using container width, we'll use CSS for responsive sizing
         container_width_style = "width: 100%"
-        # Calculate aspect ratio for responsive height
-        aspect_ratio = resized_size[1] / resized_size[0]  # height / width
-        container_height_style = f"height: 0; padding-bottom: {aspect_ratio * 100}%; position: relative"
-        image_style = "position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+        container_height_style = "height: auto"
+        image_style = "width: 100%; height: auto; display: block"
         # Use None for Streamlit component dimensions to let it auto-size
         component_width = None
         component_height = None
@@ -193,6 +191,7 @@ def image_zoom(
                 cursor: zoom-in;
             }
             #image {
+                max-width: 100%;
             }
         </style>
     """
