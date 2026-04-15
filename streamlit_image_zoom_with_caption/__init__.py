@@ -1,12 +1,24 @@
 import base64
 import io
-from typing import Optional, Tuple, Union
+import json
+import os.path
+import textwrap
+from typing import Optional, Tuple, Union, Final
+from urllib.parse import urlparse
 
 import numpy as np
+import streamlit
 import streamlit.components.v1 as components
+from google.protobuf.json_format import ParseDict
+
+from streamlit.logger import get_logger
+from streamlit.proto.NewSession_pb2 import FontFace
+
 from PIL import Image
 
 __version__ = "0.0.4"
+
+_LOGGER: Final = get_logger(__name__)
 
 
 def check_image(image: Union[Image.Image, np.ndarray]) -> Image.Image:
@@ -92,14 +104,82 @@ def prepare_image(image, size, keep_aspect_ratio):
     return pillow_to_base64(image.resize(new_size)), new_size
 
 
+def collect_font_faces_css() -> str:
+    """
+    Collects font faces definitions from the config and create @font-face and @import rules for each of them.
+
+    Returns:
+        str: A string representing the font faces definitions in CSS.
+    """
+    font_faces = streamlit.get_option("theme.fontFaces")
+
+    style = ""
+
+    # see streamlit.runtime.app_session._populate_theme_msg()
+    if isinstance(font_faces, str):
+        try:
+            font_faces = json.loads(font_faces)
+        except Exception as e:
+            _LOGGER.warning(
+                "Failed to parse the theme.fontFaces config option with json.loads: %s.",
+                font_faces,
+                exc_info=e,
+            )
+            font_faces = None
+
+    if font_faces is not None:
+        for font_face in font_faces:
+            try:
+                if "weight" in font_face:
+                    font_face["weight_range"] = str(font_face["weight"])
+                    del font_face["weight"]
+
+                face = ParseDict(font_face, FontFace())
+                css_fields = {}
+                import_url = None
+
+                for field, value in face.ListFields():
+                    if field.name == "url":
+                        parsed_url = urlparse(value)
+                        # check if url is for a file or a stylesheet
+                        if os.path.splitext(parsed_url.path)[1] in [".woff", ".woff2", ".ttf", ".otf", ".eot", ".svg"]:
+                            css_fields["src"] = f"url('{value}')"
+                        else:   # else will use @import later to import the stylesheet
+                            import_url = value
+                    elif field.name in ["weight", "weight_range"]:
+                        css_fields["font-weight"] = value
+                    elif field.name == "unicode-range":
+                        css_fields["unicode-range"] = value
+                    else:
+                        css_fields[f"font-{field.name}"] = f'"{value}", sans-serif'
+
+                if import_url:
+                    style += f"@import url('{import_url}');"
+
+                style += textwrap.dedent("""
+                @font-face {
+                    %s
+                }""") % "\n    ".join([f"{k}: {v};" for k, v in css_fields.items()])
+            except Exception as e:  # noqa: PERF203
+                _LOGGER.warning(
+                    "Failed to parse the theme.fontFaces config option: %s.",
+                    font_face,
+                    exc_info=e,
+                )
+
+    return style
+
+
 def image_zoom(
-    image: Union[Image.Image, np.ndarray],
-    mode: Optional[str] = "default",
-    size: Optional[Union[int, Tuple[int, int]]] = 512,
-    keep_aspect_ratio: Optional[bool] = True,
-    keep_resolution: Optional[bool] = False,
-    zoom_factor: Optional[Union[float, int]] = 2.0,
-    increment: Optional[float] = 0.2,
+        image: Union[Image.Image, np.ndarray],
+        mode: Optional[str] = "default",
+        size: Optional[Union[int, Tuple[int, int]]] = 512,
+        keep_aspect_ratio: Optional[bool] = True,
+        keep_resolution: Optional[bool] = False,
+        zoom_factor: Optional[Union[float, int]] = 2.0,
+        increment: Optional[float] = 0.2,
+        caption: Optional[str] = None,
+        stretch: bool = False,
 ) -> components.html:
     """
     Display an image with interactive zoom functionality.
@@ -127,6 +207,10 @@ def image_zoom(
             Default is 2.0.
         increment (Optional[float]): The increment value for adjusting the zoom level when scrolling.
             Should be between 0 and 1. Default is 0.2.
+        caption (Optional[str]): The caption for the displayed image.
+            Default is None.
+        stretch: (bool): Whether to adjust the component's size to the width and height of the parent container.
+            Default is False.
 
     Returns:
         HTML: An HTML component displaying the image with interactive zoom functionality.
@@ -141,7 +225,7 @@ def image_zoom(
     """
     mode = mode.lower()
     assert (
-        mode in ["default", "mousemove", "scroll", "both", "dragmove"]
+            mode in ["default", "mousemove", "scroll", "both", "dragmove"]
     ), "Only valid event mode are default, mousemove, scroll and both. Default work with mousemove."
     zoom_factor = float(zoom_factor) if isinstance(zoom_factor, int) else zoom_factor
     assert increment <= 1.0 or increment > 0.0, "Increment should be between 0 and 1."
@@ -161,20 +245,43 @@ def image_zoom(
         img_resized_base64, resized_size = prepare_image(image, size, keep_aspect_ratio)
         params_keep_res = ""
 
-    css_code = """
+    theme = streamlit.context.theme.type
+    caption_color = "#ffffff" if theme == "dark" else "#31333f"
+
+    theme_font = streamlit.get_option("theme.font") or "inherit"
+
+    # collect font faces and insert them in the style as iframes don't inherit styles from the parent document
+    font_faces = collect_font_faces_css()
+
+    css_code = f"""
         <style>
-            #container {
+            {font_faces}
+            #container {{
                 position: relative;
                 overflow: hidden;
                 cursor: zoom-in;
-            }
-            #image {
-                position: absolute;
+            }}
+            #image {{
+                {"position: absolute;" if not stretch else ""}
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
-            }
+                border-radius: 0.5rem;
+            }}
+            body {{
+                margin: 0;
+            }}
+            
+            p {{
+                margin:0; 
+                font-family: {theme_font}; 
+                font-size: 0.875rem; 
+                color: {caption_color}; 
+                line-height: 1.4;
+                opacity: 0.6;
+            }}
+            
         </style>
     """
     js_code = """
@@ -394,24 +501,66 @@ def image_zoom(
     """
 
     # Assemble the HTML code with CSS and JS.
-    html_code = f"""
-        {css_code}
-        <div id="container" style="width: {resized_size[0]}px; height: {resized_size[1]}px;">
-            <img id="image" src="{img_resized_base64}" {params_keep_res}>
-        </div>
-        {js_code}
-        <script>
-        var mode = "{mode}";
-        if (mode == "mousemove" || mode == "default") {{
-            ImageZoomMouseMove('image', {zoom_factor}, {str(keep_resolution).lower()});
-        }} else if (mode == "scroll") {{
-            ImageZoomScroll('image', {zoom_factor}, {increment},  {str(keep_resolution).lower()});
-        }} else if (mode == "both") {{
-            ImageZoomBoth('image', {zoom_factor}, {increment}, {str(keep_resolution).lower()});
-        }} else if (mode == "dragmove") {{
-            ImageDragMove('image', {zoom_factor}, {str(keep_resolution).lower()});
-        }}
-        </script>
-    """
+    script = f"""<script>
+            var mode = "{mode}";
+            if (mode == "mousemove" || mode == "default") {{
+                ImageZoomMouseMove('image', {zoom_factor}, {str(keep_resolution).lower()});
+            }} else if (mode == "scroll") {{
+                ImageZoomScroll('image', {zoom_factor}, {increment},  {str(keep_resolution).lower()});
+            }} else if (mode == "both") {{
+                ImageZoomBoth('image', {zoom_factor}, {increment}, {str(keep_resolution).lower()});
+            }} else if (mode == "dragmove") {{
+                ImageDragMove('image', {zoom_factor}, {str(keep_resolution).lower()});
+            }}
+            </script>
+            """
 
-    return components.html(html_code, width=resized_size[0], height=resized_size[1])
+    if stretch:
+        image_container_style = "width: 100%; height: 100%;"
+    else:
+        image_container_style = f"width: {resized_size[0]}px; height: {resized_size[1]}px;"
+
+    caption_height = 0
+
+    if not caption:
+        html_code = f"""
+            {css_code}
+    
+            <div id="container" style="{image_container_style}">
+                <img id="image" src="{img_resized_base64}" {params_keep_res}>
+            </div>
+    
+            {js_code}
+            {script}
+        """
+
+    else:
+        caption_height = 40
+        html_code = f"""
+            {css_code}
+            <div id="container" style="{image_container_style}">
+                <img id="image" src="{img_resized_base64}" {params_keep_res}>
+               
+
+            </div>
+            <div data-testid="stImageCaption" class="st-emotion-cache-r8fbmg e1mq0gaz2" style="width: 100%; max-width: 100%; text-align: center; margin-top: 0.375rem; overflow-wrap: break-word; padding: 0.125rem;">
+                <div data-testid="stCaptionContainer" class="st-emotion-cache-1jbidbm et2rgd20">
+                    <p>
+                        {caption}
+                    </p>
+                </div>
+            </div>
+
+            {js_code}
+            {script}
+            
+        """
+
+    if stretch:
+        width = "stretch"
+        height = "stretch"
+    else:
+        width = resized_size[0]
+        height = resized_size[1] + caption_height
+
+    return components.html(html_code, width=width, height=height)

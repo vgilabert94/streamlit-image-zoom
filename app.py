@@ -90,6 +90,7 @@ def main():
         zoom_factor=zoom_factor,
         increment=increase_factor,
         keep_resolution=keep_res,
+        caption='Image zoom'
     )
 
 
